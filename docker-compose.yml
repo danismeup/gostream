@@ -1,0 +1,19 @@
+version: "3.8"
+services:
+  gostream:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - DISPLAY=:99
+    # Per cattura schermo Linux con X11:
+    # volumes:
+    #   - /tmp/.X11-unix:/tmp/.X11-unix
+    # Per NVIDIA GPU (richiede nvidia-container-toolkit):
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]

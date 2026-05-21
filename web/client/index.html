@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GoStream</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #0a0a0a; color: #e0e0e0; font-family: monospace; }
+        #video { width: 100vw; height: 100vh; object-fit: contain; display: block; }
+        #hud {
+            position: fixed; top: 12px; left: 12px;
+            background: rgba(0,0,0,0.65); padding: 8px 14px;
+            border-radius: 6px; font-size: 13px;
+            border: 1px solid #333;
+        }
+        #hud span { color: #4ade80; }
+    </style>
+</head>
+<body>
+    <div id="hud">GoStream — Status: <span id="status">connecting…</span></div>
+    <video id="video" autoplay playsinline muted></video>
+
+<script>
+const video = document.getElementById('video');
+const status = document.getElementById('status');
+
+const ws = new WebSocket('ws://' + window.location.host + '/ws');
+
+const pc = new RTCPeerConnection({
+    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+});
+
+pc.ontrack = (e) => {
+    if (video.srcObject !== e.streams[0]) {
+        video.srcObject = e.streams[0];
+        status.textContent = 'streaming';
+    }
+};
+
+pc.oniceconnectionstatechange = () => {
+    status.textContent = pc.iceConnectionState;
+};
+
+ws.onopen = async () => {
+    status.textContent = 'signaling…';
+    pc.addTransceiver('video', { direction: 'recvonly' });
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    ws.send(JSON.stringify({ type: 'offer', sdp: offer.sdp }));
+};
+
+ws.onmessage = async (event) => {
+    const msg = JSON.parse(event.data);
+    if (msg.type === 'answer') {
+        await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: msg.sdp }));
+    }
+};
+
+// --- Input forwarding (Phase 1: WebSocket) ---
+// Phase 4: migrate to RTCDataChannel for lower latency
+
+function sendInput(data) {
+    if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data));
+}
+
+document.addEventListener('mousemove', (e) => {
+    sendInput({ t: 'm', x: e.clientX / window.innerWidth, y: e.clientY / window.innerHeight });
+});
+
+document.addEventListener('mousedown', (e) => {
+    sendInput({ t: 'm', x: e.clientX / window.innerWidth, y: e.clientY / window.innerHeight, buttons: e.buttons });
+});
+
+document.addEventListener('keydown', (e) => {
+    e.preventDefault();
+    sendInput({ t: 'k', c: e.code, d: true });
+});
+
+document.addEventListener('keyup', (e) => {
+    sendInput({ t: 'k', c: e.code, d: false });
+});
+</script>
+</body>
+</html>
